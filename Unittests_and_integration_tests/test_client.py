@@ -2,11 +2,15 @@
 """Unit tests for GithubOrgClient."""
 
 import unittest
-from unittest.mock import patch, PropertyMock
+import requests
+from unittest.mock import Mock, patch, PropertyMock
 
-from parameterized import parameterized
+from parameterized import parameterized, parameterized_class
 
 from client import GithubOrgClient
+from fixtures import (
+    org_payload, repos_payload, expected_repos, apache2_repos
+)
 
 
 class TestGithubOrgClient(unittest.TestCase):
@@ -82,6 +86,52 @@ class TestGithubOrgClient(unittest.TestCase):
         self.assertEqual(
             test_client.has_license(repo, license_key),
             expected,
+        )
+
+
+@parameterized_class(
+    ("org_payload", "repos_payload", "expected_repos", "apache2_repos"),
+    [
+        (org_payload, repos_payload, expected_repos, apache2_repos),
+    ],
+)
+class TestIntegrationGithubOrgClient(unittest.TestCase):
+    """Integration tests for GithubOrgClient using fixtures."""
+
+    @classmethod
+    def setUpClass(cls):
+        """Start a mock for requests.get."""
+        cls.get_patcher = patch("requests.get")
+        cls.mock_get = cls.get_patcher.start()
+
+        def get_payload(url):
+            response = Mock()
+            if url == "https://api.github.com/orgs/google":
+                response.json.return_value = cls.org_payload
+            elif url == "https://api.github.com/orgs/google/repos":
+                response.json.return_value = cls.repos_payload
+            else:
+                response.json.return_value = {}
+            return response
+
+        cls.mock_get.side_effect = get_payload
+
+    @classmethod
+    def tearDownClass(cls):
+        """Stop the requests.get patcher."""
+        cls.get_patcher.stop()
+
+    def test_public_repos(self):
+        """Test public_repos returns repositories from the fixtures."""
+        client = GithubOrgClient("google")
+        self.assertEqual(client.public_repos(), self.expected_repos)
+
+    def test_public_repos_with_license(self):
+        """Test public_repos filters repositories by Apache 2.0 license."""
+        client = GithubOrgClient("google")
+        self.assertEqual(
+            client.public_repos("apache-2.0"),
+            self.apache2_repos,
         )
 
 
