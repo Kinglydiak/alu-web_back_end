@@ -55,3 +55,34 @@ def get_db():
         host=os.getenv("PERSONAL_DATA_DB_HOST", "localhost"),
         database=os.getenv("PERSONAL_DATA_DB_NAME"),
     )
+
+
+def main() -> None:
+    """Read users from the database and log rows with PII redacted."""
+    connection = get_db()
+    try:
+        cursor = connection.cursor()
+        try:
+            cursor.execute(
+                "SELECT name, email, phone, ssn, password, ip, "
+                "last_login, user_agent FROM users"
+            )
+            logger = get_logger()
+            for row in cursor.fetchall():
+                message = "; ".join(
+                    "{}={}".format(field, value)
+                    for field, value in zip(
+                        ("name", "email", "phone", "ssn", "password",
+                         "ip", "last_login", "user_agent"),
+                        row
+                    )
+                )
+                logger.info(message)
+        finally:
+            cursor.close()
+    finally:
+        connection.close()
+
+
+if __name__ == "__main__":
+    main()
